@@ -1,10 +1,9 @@
-# import logging
+import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler
 import config
 import requests
 import json
 from datetime import datetime
-import time
 import sqlite3
 
 
@@ -39,11 +38,7 @@ class DB:
     def add_msg(self, id_for_add, name_for_add, user):
         self.cursor.execute("SELECT last_msg FROM Users WHERE id_user=?", [user])
         last_db = str(self.cursor.fetchall()[0])
-        if last_db == "(None,)":
-            list_of_companies = str(id_for_add) + ', ' + name_for_add
-        else:
-            list_of_companies = last_db + ";" + str(id_for_add) + ', ' + name_for_add
-        print(list_of_companies)
+        list_of_companies = last_db + ', ' + str(id_for_add) + ', ' + name_for_add
         self.cursor.execute("UPDATE Users SET last_msg=? WHERE id_user=?", (list_of_companies, user))
         self.conn.commit()
 
@@ -74,7 +69,7 @@ class DB:
         self.conn.commit()
 
 
-# logging.basicConfig(level=logging.INFO, filename="bot.log", format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, filename="bot.log", format='%(asctime)s - %(levelname)s - %(message)s')
 
 API, GROUP = range(2)
 for_db = []
@@ -107,14 +102,14 @@ def get_group(bot, update):
     for_db.append(user_group)
     chat = update.message.chat_id
     update.message.reply_text("Данные получены, запускаю обработку")
-    send_to_db(update, chat, for_db)
+    send_to_db(chat, for_db, update)
     return ConversationHandler.END
 
 
-def send_to_db(update, chat, for_db):
+def send_to_db(chat, for_db, update):
     class_db.add_user(chat, for_db[0])
     class_db.add_id_group(chat, for_db[1])
-    send_msg(update)
+    send_msg(chat, update)
 
 
 def dontknow(bot, update, user_data):
@@ -140,21 +135,21 @@ def start_bot():
     my_bot.start_polling()
     my_bot.idle()
 
-def send_msg(update):
+
+def send_msg(chat, update):
     while True:
         dateSTR = datetime.strftime(datetime.now(), "%H:%M:%S")
-        if dateSTR >= "23:57:00" and dateSTR <= "00:02:00":
+        print(dateSTR)
+        if dateSTR >= "22:57:00" and dateSTR <= "23:02:00":
             class_db.del_last_msg()
         else:
-            check(collect(), update)
+            check(collect(), chat)
             time.sleep(600)
-
 
 
 def collect():
     get_collect = requests.get(
-        config.url + config.user_group + '&group=' + for_db[1] + config.traffic_source + config.date + config.status +
-        for_db[
+        config.url + config.user_group + '&group=' + for_db[1] + config.traffic_source + config.date + config.status + for_db[
             0])
     result = get_collect.json()
     dict_id = []
@@ -166,33 +161,35 @@ def collect():
 last_msg = []
 
 
-def check(dict_id, update):
+def check(dict_id, chat, update):
     for i in range(len(dict_id)):
         get_check = requests.get(config.url_campeign + "&camp_id=" + dict_id[i][
             0] + "&order_name=&order_type=ASC&group1=27&group2=1&group3=1&" + for_db[0])
         all_list = get_check.json()
         for item in range(len(all_list)):
             try:
-                if int(all_list[item]["leads"]) > 5 or (int(all_list[item]["clicks"]) > 100 and int(all_list[item]["leads"] == 0)):
+                if int(all_list[item]["leads"]) > 5:
                     if (dict_id[i][0], all_list[item]["name"]) not in last_msg:
-                        send(dict_id[i][0], dict_id[i][1], all_list[item]["name"], all_list[item]["clicks"],
-                             all_list[item]["leads"], update)
+                        send(dict_id[i][0], all_list[item]["name"], all_list[item]["clicks"], all_list[item]["leads"],
+                             chat, update)
                         last_msg.append((dict_id[i][0], all_list[item]["name"]))
+                """
+                if int(all_list[item]["leads"]) > 25 or (
+                        int(all_list[item]["clicks"]) > 1000 and int(all_list[item]["leads"] == 0)):
+                    if (dict_id[i][0], all_list[item]["name"]) not in last_msg:
+                        send(dict_id[i][0], all_list[item]["name"], all_list[item]["clicks"], all_list[item]["leads"],
+                             chat)
+                        last_msg.append((dict_id[i][0], all_list[item]["name"]))
+                """
             except:
                 pass
 
 
-def send(id_campaign, name_campaign, name, clicks, leads, update):
-    chat = update.message.chat_id
-    last = class_db.get_last(chat)
-    class_db.add_msg(id_campaign, name, chat)
-    """
-    if (id_campaign, name) in last:
-        pass
-    else:
-        update.message.reply_text("В компании ({}) {} найдена подозрительная площадка '{}' c clicks - {} и leads - {}".format(id_campaign, name_campaign, name, clicks, leads))
-        class_db.add_msg(id_campaign, name, chat)
-    """
+def send(id_campain, name, clicks, leads, chat, update):
+    update.message.reply_text(
+                     "В компании с id - '{}' найдена подозрительная площадка '{}' c clicks - {} и leads - {}".format(
+                         id_campain, name, clicks, leads))
+
 
 class_db = DB("binom.db")
 if __name__ == "__main__":
