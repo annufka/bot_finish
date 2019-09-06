@@ -37,14 +37,7 @@ class DB:
 
     # добавим последнюю компанию и плохую площадку, чтобы не повторять сообщения
     def add_msg(self, id_for_add, name_for_add, user):
-        self.cursor.execute("SELECT last_msg FROM Users WHERE id_user=?", [user])
-        last_db = str(self.cursor.fetchall()[0])
-        if last_db == "(None,)":
-            list_of_companies = str(id_for_add) + ', ' + name_for_add
-        else:
-            list_of_companies = last_db + ";" + str(id_for_add) + ', ' + name_for_add
-        print(list_of_companies)
-        self.cursor.execute("UPDATE Users SET last_msg=? WHERE id_user=?", (list_of_companies, user))
+        self.cursor.execute("INSERT Users SET last_msg=? WHERE id_user=?", ("("+str(id_for_add)+","+name_for_add+")", user))
         self.conn.commit()
 
     # возвращаем колонку ключей
@@ -64,8 +57,7 @@ class DB:
     # возвращаем колонку сообщений
     def get_last(self, user):
         self.cursor.execute("SELECT last_msg FROM Users WHERE id_user=?", [user])
-        return_msg = str(self.cursor.fetchall()[0])
-        return_msg = return_msg.replace("('", "").replace("',)", "")
+        return_msg = self.cursor.fetchall()
         return return_msg
 
     # очищаем колонку с сообщениями раз в сутки
@@ -173,7 +165,7 @@ def check(dict_id, update):
         all_list = get_check.json()
         for item in range(len(all_list)):
             try:
-                if int(all_list[item]["leads"]) > 5 or (int(all_list[item]["clicks"]) > 100 and int(all_list[item]["leads"] == 0)):
+                if int(all_list[item]["leads"]) > 1 or (int(all_list[item]["clicks"]) > 10 and int(all_list[item]["leads"] == 0)):
                     if (dict_id[i][0], all_list[item]["name"]) not in last_msg:
                         send(dict_id[i][0], dict_id[i][1], all_list[item]["name"], all_list[item]["clicks"],
                              all_list[item]["leads"], update)
@@ -186,13 +178,12 @@ def send(id_campaign, name_campaign, name, clicks, leads, update):
     chat = update.message.chat_id
     last = class_db.get_last(chat)
     class_db.add_msg(id_campaign, name, chat)
-    """
+    print(last)
     if (id_campaign, name) in last:
         pass
     else:
         update.message.reply_text("В компании ({}) {} найдена подозрительная площадка '{}' c clicks - {} и leads - {}".format(id_campaign, name_campaign, name, clicks, leads))
         class_db.add_msg(id_campaign, name, chat)
-    """
 
 class_db = DB("binom.db")
 if __name__ == "__main__":
